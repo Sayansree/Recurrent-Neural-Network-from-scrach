@@ -9,6 +9,9 @@ class RecurrentNeuralNetwork:
     def __init__(self,hidden_size=10): 
         """hidden_size is number of neurons in hidden layer"""  
         self.hidden_size=hidden_size
+        self.activation={"sigmoid":(self.sigmoid,self.sig_grad),
+                            "RELU":(self.RELU,self.RELU_grad),
+                            "tanh":(self.tanh,self.tanh_grad)}
   
     def fit(self,X,Y):
         """input your training dataset
@@ -32,7 +35,7 @@ class RecurrentNeuralNetwork:
 
     def tanh_grad(self,x):
         """gradiant through tanh function"""
-        return 1-self.tanh(x)**2
+        return np.minimum(1-self.tanh(x)**2,1e2)
    
     def RELU(self,x):
         """for RELU activation"""
@@ -50,8 +53,12 @@ class RecurrentNeuralNetwork:
         """gradiant through sigmoid function"""
         return x*(1-x)
     
-    def train(self,rate=1):
+    def train(self,rate=1,activation="sigmoid"):
         """train the model on the dataset provided , rate: learning rate"""
+        
+        activate,actv_grad=self.activation[activation]
+
+        
         # initialise our weights randomly for hidden and output layers and recursion of previous layers
         hidden_weight=2*np.random.random((self.input_size,self.hidden_size))-1              
         output_weight=2*np.random.random((self.hidden_size,self.output_size))-1
@@ -76,13 +83,14 @@ class RecurrentNeuralNetwork:
             for time,X in enumerate(X1):
                 # hidden state is function of both input of current time step and hidden state of previous time step
                 #note we can also use other activation like RELU or tanh which may affect performanc
-                hiddenlayer= self.sigmoid(np.dot(X,hidden_weight)+np.dot(hidden_layers[-1],recurent_weight))
-                outputlayer= self.sigmoid(np.dot(hiddenlayer,output_weight))
+                
+                hiddenlayer= activate(np.dot(X,hidden_weight)+np.dot(hidden_layers[-1],recurent_weight))
+                outputlayer= activate(np.dot(hiddenlayer,output_weight))
                 #calulate error
                 error= Y1[time]-outputlayer
                 total_errors+=np.abs(error[0,0])
                 #gradient of output layer
-                outputGradient=error*self.sig_grad(outputlayer)
+                outputGradient=error*actv_grad(outputlayer)
                 #we store the hidden layers and output gradients to calculate the gradients of weight vectors
                 hidden_layers.append(np.atleast_2d(hiddenlayer))
                 output_gradients.append(np.atleast_2d(outputGradient))
@@ -98,7 +106,7 @@ class RecurrentNeuralNetwork:
             for time,X in enumerate(X1[::-1]):
                 time=X1.shape[0]-time-1
                 #recursively set current gradients and all future gradients linked to this time step
-                hidden_layer_gradients=(np.dot(future_gradients,recurent_weight.T)+ np.dot(output_gradients[time],output_weight.T))*self.sig_grad(hidden_layers[time+1])
+                hidden_layer_gradients=(np.dot(future_gradients,recurent_weight.T)+ np.dot(output_gradients[time],output_weight.T))*actv_grad(hidden_layers[time+1])
                 #sum of gradients of error in each time step
                 output_weight_gradient+=hidden_layers[time+1].T.dot(output_gradients[time])
                 hidden_weight_gradient+=np.atleast_2d(X).T.dot(hidden_layer_gradients)
@@ -110,7 +118,7 @@ class RecurrentNeuralNetwork:
             output_weight+=rate * output_weight_gradient
             recurent_weight += rate * recurent_weight_gradient
             # print error in intervals
-            if i %500==0:
+            if i %1000==0:
                 print("iteration: {0}\t\t error: {1}".format(i,total_errors))
         #we save our weights
         self.hidden_weight=hidden_weight
